@@ -30,7 +30,6 @@ Parameters:
 - *$mode*: see apache::vhost
 - *$aliases*: see apache::vhost. The generated SSL certificate will have this
   list as DNS subjectAltName entries.
-- *$enable_default*: see apache::vhost
 - *$ip_address*: the ip address defined in the <VirtualHost> directive.
   Defaults to "*".
 - *$cert*: optional source URL of the certificate (see examples below), if the
@@ -42,6 +41,8 @@ Parameters:
 - *$cacert*: optional source URL of the CA certificate, if the defaults bundled
   with your distribution don't suit. This the certificate passed to the
   SSLCACertificateFile directive.
+- *$cacrl*: optional source URL of the CA certificate revocation list.
+  This is the file passed to the SSLCARevocationFile directive.
 - *$certchain*: optional source URL of the CA certificate chain, if needed.
   This the certificate passed to the SSLCertificateChainFile directive.
 - *$certcn*: set a custom CN field in your SSL certificate. Note that
@@ -110,12 +111,12 @@ define apache::vhost-ssl (
   $cert=false,
   $certkey=false,
   $cacert=false,
+  $cacrl=false,
   $certchain=false,
   $certcn=false,
   $days="3650",
   $publish_csr=false,
   $sslonly=false,
-  $enable_default=true,
   $ports=['*:80'],
   $sslports=['*:443'],
   $accesslog_format="combined",
@@ -170,6 +171,11 @@ define apache::vhost-ssl (
     }
   }
 
+  # If a revocation file is provided
+  if $cacrl != false {
+    $cacrlfile = "${apache::params::root}/$name/ssl/cacert.crl"
+  }
+
   if $certchain != false {
     $certchainfile = "${apache::params::root}/$name/ssl/certchain.crt"
   }
@@ -195,7 +201,6 @@ define apache::vhost-ssl (
     admin          => $admin,
     group          => $wwwgroup,
     mode           => $mode,
-    enable_default => $enable_default,
     ports          => $ports,
     accesslog_format => $accesslog_format,
     template       => $template,
@@ -279,6 +284,18 @@ define apache::vhost-ssl (
       }
     }
 
+    if $cacrl != false {
+      # certificate revocation file
+      file { $cacrlfile:
+        owner   => "root",
+        group   => "root",
+        mode    => 640,
+        source  => $cacrl,
+        seltype => "cert_t",
+        notify  => Exec["apache-graceful"],
+        require => File["${apache::params::root}/${name}/ssl"],
+      }
+    }
 
     if $certchain != false {
 
@@ -307,7 +324,10 @@ define apache::vhost-ssl (
         false   => "${apache::params::root}/${name}/htdocs/${name}.csr",
         default => $publish_csr,
       },
-      source  => "file://$csrfile",
+      source  => $publish_csr ? {
+        false   => undef,
+        default => "file://$csrfile",
+      },
       mode    => 640,
       seltype => "httpd_sys_content_t",
       require => Exec["generate-ssl-cert-$name"],

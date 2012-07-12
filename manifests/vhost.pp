@@ -12,7 +12,6 @@ define apache::vhost (
   $group="",
   $mode=2570,
   $aliases=[],
-  $enable_default=true,
   $ports=['*:80'],
   $accesslog_format="combined",
   $template="apache/vhost.erb"
@@ -42,26 +41,6 @@ define apache::vhost (
     true    => "${wwwroot}/${name}/cgi-bin/",
     false   => false,
     default => $cgibin,
-  }
-
-  # check if default virtual host is enabled
-  if $enable_default == true {
-
-    exec { "enable default virtual host from ${name}":
-      command => "a2ensite default",
-      unless  => "test -L ${apache::params::conf}/sites-enabled/000-default",
-      notify  => Exec["apache-graceful"],
-      require => Package["apache"],
-    }
-
-  } else {
-
-    exec { "disable default virtual host from ${name}":
-      command => "a2dissite default",
-      onlyif  => "test -L ${apache::params::conf}/sites-enabled/000-default",
-      notify  => Exec["apache-graceful"],
-      require => Package["apache"],
-    }
   }
 
   case $ensure {
@@ -237,14 +216,14 @@ define apache::vhost (
       }
 
       exec {"enable vhost ${name}":
-        command => $::operatingsystem ? {
-          /RedHat|CentOS|Amazon|Linux/ => "/usr/local/sbin/a2ensite ${name}",
-          default => "/usr/sbin/a2ensite ${name}"
+        command => $operatingsystem ? {
+          RedHat => "${apache::params::a2ensite} ${name}",
+          CentOS => "${apache::params::a2ensite} ${name}",
+          default => "${apache::params::a2ensite} ${name}"
         },
         notify  => Exec["apache-graceful"],
-        require => [$::operatingsystem ? {
-          redhat => File["/usr/local/sbin/a2ensite"],
-          CentOS => File["/usr/local/sbin/a2ensite"],
+        require => [$operatingsystem ? {
+          /RedHat|CentOS|Amazon/ => File["${apache::params::a2ensite}"],
           default => Package[$apache::params::pkg]},
           File["${apache::params::conf}/sites-available/${name}"],
           File["${apache::params::root}/${name}/htdocs"],
@@ -276,14 +255,12 @@ define apache::vhost (
 
       exec { "disable vhost ${name}":
         command => $::operatingsystem ? {
-          RedHat => "/usr/local/sbin/a2dissite ${name}",
-          CentOS => "/usr/local/sbin/a2dissite ${name}",
+          /RedHat|CentOS|Amazon/ => "/usr/local/sbin/a2dissite ${name}",
           default => "/usr/sbin/a2dissite ${name}"
         },
         notify  => Exec["apache-graceful"],
-        require => [$::operatingsystem ? {
-          redhat => File["/usr/local/sbin/a2ensite"],
-          CentOS => File["/usr/local/sbin/a2ensite"],
+        require => [$operatingsystem ? {
+          /RedHat|CentOS|Amazon/ => File["${apache::params::a2ensite}"],
           default => Package[$apache::params::pkg]}],
         onlyif => "/bin/sh -c '[ -L ${apache::params::conf}/sites-enabled/${name} ] \\
           && [ ${apache::params::conf}/sites-enabled/${name} -ef ${apache::params::conf}/sites-available/${name} ]'",

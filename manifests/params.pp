@@ -23,6 +23,11 @@ class apache::params {
     /Debian|Ubuntu/ => 'www-data',
   }
 
+  $group = $operatingsystem ? {
+    /RedHat|CentOS/ => 'apache',
+    /Debian|Ubuntu/ => 'www-data',
+  }
+
   $conf = $operatingsystem ? {
     /RedHat|CentOS|Amazon/ => '/etc/httpd',
     /Debian|Ubuntu/ => '/etc/apache2',
@@ -38,7 +43,12 @@ class apache::params {
     /Debian|Ubuntu/ => "${log}/access.log",
   }
 
-  $error_log = $::operatingsystem ? {
+  $a2ensite = $operatingsystem ? {
+    /RedHat|CentOS|Amazon/ => '/usr/local/sbin/a2ensite',
+    /Debian|Ubuntu/ => '/usr/sbin/a2ensite',
+  }
+
+  $error_log = $operatingsystem ? {
     /RedHat|CentOS|Amazon/ => "${log}/error_log",
     /Debian|Ubuntu/ => "${log}/error.log",
   }
